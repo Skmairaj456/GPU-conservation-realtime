@@ -1,6 +1,3 @@
-import torch
-from src.core.gpu_controller import GPUGovernor
-import time
 
 def demonstrate_energy_savings():
     governor = GPUGovernor()
@@ -48,27 +45,30 @@ def demonstrate_energy_savings():
         print(f"GPU Utilization: {runtime_metrics.get('utilization', 'n/a')}")
         print(f"Memory Usage: {runtime_metrics.get('memory_used', 'n/a')}")
         print(f"Estimated Power Savings: {history.get('power_saved_percent', 0.0):.1f}%")
-        print(f"Memory Savings: {history.get('memory_saved_percent', 0.0):.1f}%")
-        print(f"Execution Time: {duration*1000:.1f}ms")
+import torch
+import time
+import pytest
+from src.core.gpu_controller import GPUGovernor
 
-        # Compute Joules saved during this workload (if energy_metrics available)
-        if energy_metrics is not None:
-            joules = governor.compute_joules_saved(duration, energy_metrics)
-        else:
-            joules = 0.0
-        total_energy_saved += joules
-        baseline_energy += governor.baseline_power * duration
-        # Cleanup
-        del A, B, C
-        torch.cuda.empty_cache()
-        time.sleep(1)  # Let GPU cool between tests
-    
-    # Summary
-    print("\nFinal Energy Analysis")
-    print("===================")
-    print(f"Baseline Energy (FP32): {baseline_energy:.1f} Joules")
-    print(f"Total Energy Saved: {total_energy_saved:.1f} Joules")
-    print(f"Energy Reduction: {(total_energy_saved/baseline_energy)*100:.1f}%")
-    
-if __name__ == "__main__":
-    demonstrate_energy_savings()
+@pytest.mark.parametrize("desc,complexity,expected_fp", [
+    ("Simple matrix multiply (2x2)", 0.1, "fp8"),
+    ("Medium batch processing", 0.5, "fp16"),
+    ("Complex transformer inference", 0.9, "fp32"),
+])
+def test_energy_savings_fp_selection(desc, complexity, expected_fp):
+    governor = GPUGovernor()
+    fp_tier, energy_metrics = governor.apply_fp_for_workload(complexity)
+    assert fp_tier == expected_fp, f"Expected {expected_fp}, got {fp_tier} for {desc}"
+    assert energy_metrics.power_saved_percent >= 0.0
+    # Simulate workload
+    size = 1024 if complexity < 0.5 else 2048
+    with governor.fp_precision_context():
+        A = torch.randn(size, size, device='cuda')
+        B = torch.randn(size, size, device='cuda')
+        start = time.time()
+        C = torch.matmul(A, B)
+        torch.cuda.synchronize()
+        duration = time.time() - start
+    runtime_metrics = governor.get_current_metrics()
+    assert 'utilization' in runtime_metrics
+    assert 'memory_used' in runtime_metrics

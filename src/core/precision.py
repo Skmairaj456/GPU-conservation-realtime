@@ -15,6 +15,26 @@ class EnergyMetrics:
     cumulative_energy_saved: float
 
 class PrecisionManager:
+    def get_context(self, tier: Optional[str] = None):
+        """Return a context manager for the given or current FP tier."""
+        if tier is None:
+            tier = self.current_fp_tier
+        if not torch.cuda.is_available():
+            return nullcontext()
+        # FP4/FP8 fall back to FP16
+        if tier in ('fp4', 'fp8'):
+            self.logger.warning(f"Requested {tier} execution, but low-bit precision requires specialized runtime support. Falling back to fp16.")
+            try:
+                return torch.amp.autocast('cuda', dtype=torch.float16)
+            except Exception:
+                return nullcontext()
+        if tier == 'fp16':
+            try:
+                return torch.amp.autocast('cuda', dtype=torch.float16)
+            except Exception:
+                return nullcontext()
+        # FP32 default
+        return nullcontext()
     """Manages FP precision selection and provides execution contexts."""
     
     # Precision tiers and their characteristics
@@ -45,16 +65,9 @@ class PrecisionManager:
         self.logger = logging.getLogger(__name__)
         self.current_fp_tier = 'fp32'
         
-    def select_precision(self, complexity: float) -> Tuple[str, EnergyMetrics]:
-        """Select most efficient precision tier for given complexity.
-        
-        Args:
-            complexity: Float in [0,1] indicating computational complexity
-            
-        Returns:
-            Tuple of (precision_tier, energy_metrics)
-        """
-        # Map complexity ranges to precision tiers
+    def analyze_complexity(self, complexity: float) -> Tuple[str, EnergyMetrics]:
+        """Analyze complexity and select precision tier with metrics."""
+        # Map complexity to FP tier
         if complexity <= 0.05:
             tier = 'fp4'
         elif complexity <= 0.2:
@@ -63,17 +76,33 @@ class PrecisionManager:
             tier = 'fp16'
         else:
             tier = 'fp32'
-            
-        # Get characteristics for selected tier
-        chars = self.TIERS[tier]
         metrics = EnergyMetrics(
             fp_tier=tier,
-            power_saved_percent=chars['power_saved_percent'],
-            memory_saved_percent=chars['memory_saved_percent'],
-            relative_speed=chars['relative_speed'],
+            power_saved_percent=self.TIERS[tier]['power_saved_percent'],
+            memory_saved_percent=self.TIERS[tier]['memory_saved_percent'],
+            relative_speed=self.TIERS[tier]['relative_speed'],
             cumulative_energy_saved=0.0
         )
+        self.current_fp_tier = tier
+        return tier, metrics
         
+        # Map complexity to FP tier
+        if complexity <= 0.05:
+            tier = 'fp4'
+        elif complexity <= 0.2:
+            tier = 'fp8'
+        elif complexity <= 0.7:
+            tier = 'fp16'
+        else:
+            tier = 'fp32'
+        metrics = EnergyMetrics(
+            fp_tier=tier,
+            power_saved_percent=self.TIERS[tier]['power_saved_percent'],
+            memory_saved_percent=self.TIERS[tier]['memory_saved_percent'],
+            relative_speed=self.TIERS[tier]['relative_speed'],
+            cumulative_energy_saved=0.0
+        )
+        self.current_fp_tier = tier
         return tier, metrics
         
     def get_execution_context(self, tier: Optional[str] = None):

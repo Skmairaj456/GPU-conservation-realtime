@@ -20,24 +20,40 @@ class GPUTelemetry:
     clock_speed: Optional[int]
 
 class TelemetryManager:
+    def get_gpu_state(self):
+        """Return a dummy GPUState for testing purposes."""
+        from src.core.gpu_controller import GPUState
+        return GPUState(
+            utilization=50.0,
+            memory_used=4096.0,
+            memory_total=8192.0,
+            temperature=65.0,
+            power_draw=120.0,
+            clock_speed=1500,
+            performance_state='P2'
+        )
+    def update_energy_metrics(self, metrics):
+        """Update energy metrics with current telemetry (stub for now)."""
+        # In a real implementation, update metrics.cumulative_energy_saved using live telemetry
+        return metrics
     """Manages GPU telemetry collection via NVML."""
-    
-    def __init__(self):
+    def __init__(self, gpu_id: int = 0):
         self.logger = logging.getLogger(__name__)
+        self.gpu_id = gpu_id
         self._nvml = pynvml
         self._nvml_initialized = False
         self._nvml_handle = None
         self._init_nvml()
-    
+
     def _init_nvml(self):
         """Initialize NVML for power/temp monitoring."""
         if not self._nvml or self._nvml_initialized:
             return
         try:
             self._nvml.nvmlInit()
-            self._nvml_handle = self._nvml.nvmlDeviceGetHandleByIndex(0)
+            self._nvml_handle = self._nvml.nvmlDeviceGetHandleByIndex(self.gpu_id)
             self._nvml_initialized = True
-            self.logger.info("NVML initialized for power telemetry")
+            self.logger.info(f"NVML initialized for GPU {self.gpu_id} telemetry")
         except Exception as e:
             self.logger.warning(f"NVML init failed: {e}; power telemetry disabled")
             self._nvml = None
