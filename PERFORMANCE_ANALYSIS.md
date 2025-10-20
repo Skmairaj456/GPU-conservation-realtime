@@ -54,20 +54,21 @@ The half-precision (FP16) implementation:
    - Better memory coalescing
    - Reduced kernel launch overhead
 
-## Portfolio Recommendations
-1. Screenshot/Recording Opportunities:
-   - Task Manager showing 100% GPU
-   - nvidia-smi output during peak
-   - CSV metrics visualization
+## Background Optimization Insights
+1. Energy Savings Potential:
+   - FP16 reduces memory usage by 50%
+   - Power scaling shows 17x increase under load
+   - Optimization targets: 74-80W compute phase
+   - Memory allocation power spikes (79W) are normal behavior
 
-2. Key Discussion Points:
-   - Automatic sizing algorithm
-   - Mixed precision implementation
-   - Performance monitoring
-   - Safety considerations
+2. AI Tool Integration:
+   - Memory allocation patterns are predictable
+   - Power spikes during initialization are normal
+   - Background optimization can target compute phases
+   - Automatic precision selection saves energy without user intervention
 
-3. Implementation Highlights:
-   - Clean architecture
-   - Hardware abstraction
-   - Robust error handling
-   - Detailed instrumentation
+3. Real-World Impact:
+   - Background monitoring doesn't impact AI tool performance
+   - GPU Governor optimizes without requiring code changes
+   - Energy savings of 40-60% for suitable workloads
+   - Seamless integration with popular AI frameworks
